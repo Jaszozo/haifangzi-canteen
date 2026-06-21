@@ -34,6 +34,12 @@
   .cat .name{font-size:18px;font-weight:800;min-height:50px;display:flex;align-items:center;justify-content:center;transition:.06s}
   .cat .name.spin{filter:blur(1px);opacity:.6}
   .cat .ops{display:flex;gap:6px;justify-content:center;margin-top:6px}
+  .cat .dsearch{width:100%;margin-top:8px;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .dlist{position:absolute;left:8px;right:8px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 22px rgba(80,60,30,.16);z-index:6;max-height:190px;overflow:auto;text-align:left;display:none;margin-top:2px}
+  .dlist.show{display:block}
+  .dlist .opt{padding:9px 11px;font-size:14px;cursor:pointer;border-bottom:1px solid #f4efe7}
+  .dlist .opt:active{background:var(--a-soft)}
+  .dlist .none{padding:9px 11px;font-size:12px;color:var(--sub)}
   .icon{border:none;background:rgba(255,255,255,.7);border-radius:8px;padding:5px 9px;font-size:12px;cursor:pointer;font-weight:700;color:var(--ink)}
   .toolbar{display:flex;gap:10px;justify-content:center;margin:12px 0 2px;flex-wrap:wrap}
   .sec-title{font-size:13px;color:var(--sub);font-weight:800;margin:0 0 12px}
@@ -82,9 +88,9 @@
       <button class="icon" id="refresh">🔄 刷新</button>
     </div>
     <div class="cards">
-      <div class="cat A" id="cat-A"><div class="tag">A · 荤菜</div><div class="desc">蔬菜炒肉</div><div class="name" id="name-A">—</div><div class="ops"><button class="icon" data-d="A">🎲 单抽</button><button class="icon" data-l="A">🔒</button></div></div>
-      <div class="cat B" id="cat-B"><div class="tag">B · 配菜</div><div class="desc">非绿叶/蛋</div><div class="name" id="name-B">—</div><div class="ops"><button class="icon" data-d="B">🎲 单抽</button><button class="icon" data-l="B">🔒</button></div></div>
-      <div class="cat C" id="cat-C"><div class="tag">C · 时蔬</div><div class="desc">绿叶菜</div><div class="name" id="name-C">—</div><div class="ops"><button class="icon" data-d="C">🎲 单抽</button><button class="icon" data-l="C">🔒</button></div></div>
+      <div class="cat A" id="cat-A"><div class="tag">A · 荤菜</div><div class="desc">蔬菜炒肉</div><div class="name" id="name-A">—</div><div class="ops"><button class="icon" data-d="A">🎲 单抽</button><button class="icon" data-l="A">🔒</button></div><input class="dsearch" id="search-A" placeholder="🔍 搜/输入菜名"><div class="dlist" id="dlist-A"></div></div>
+      <div class="cat B" id="cat-B"><div class="tag">B · 配菜</div><div class="desc">非绿叶/蛋</div><div class="name" id="name-B">—</div><div class="ops"><button class="icon" data-d="B">🎲 单抽</button><button class="icon" data-l="B">🔒</button></div><input class="dsearch" id="search-B" placeholder="🔍 搜/输入菜名"><div class="dlist" id="dlist-B"></div></div>
+      <div class="cat C" id="cat-C"><div class="tag">C · 时蔬</div><div class="desc">绿叶菜</div><div class="name" id="name-C">—</div><div class="ops"><button class="icon" data-d="C">🎲 单抽</button><button class="icon" data-l="C">🔒</button></div><input class="dsearch" id="search-C" placeholder="🔍 搜/输入菜名"><div class="dlist" id="dlist-C"></div></div>
     </div>
     <div class="toolbar">
       <button class="btn btn-ghost" id="rollAll">🎰 全部抽取</button>
@@ -202,6 +208,8 @@ function spin(cat){
 function rollAll(){['A','B','C'].forEach(spin);}
 function toggleLock(cat,btn){locked[cat]=!locked[cat];$('cat-'+cat).classList.toggle('locked',locked[cat]);btn.textContent=locked[cat]?'🔓':'🔒';}
 function renderPick(){['A','B','C'].forEach(c=>{$('name-'+c).textContent=chosen[c]?chosen[c].name:'—';});}
+function fuzzy(q,name){q=(q||'').replace(/\s/g,'');name=(name||'').replace(/\s/g,'');if(!q)return true;if(name.includes(q)||q.includes(name))return true;const qs=new Set(q.split(''));const ns=[...new Set(name.split(''))];let hit=0;ns.forEach(c=>{if(qs.has(c))hit++;});return hit>=2&&hit/ns.length>=0.5;}
+function searchDishes(cat){const q=$('search-'+cat).value.trim();const box=$('dlist-'+cat);if(!q){box.classList.remove('show');box.innerHTML='';return;}const pool=(MENU[cat]||[]).filter(d=>fuzzy(q,d.name));box.innerHTML='';if(!pool.length){box.innerHTML='<div class="none">无匹配，可去①菜库录入</div>';}else{pool.slice(0,20).forEach(d=>{const o=document.createElement('div');o.className='opt';o.textContent=d.name;o.onclick=()=>{selectDish(cat,d.name);$('search-'+cat).value='';box.classList.remove('show');};box.appendChild(o);});}box.classList.add('show');}
 async function confirmPick(){
   if(!chosen.A||!chosen.B||!chosen.C){toast('请先抽满三道菜');return;}
   const pick={date:todayStr(),A:chosen.A.name,B:chosen.B.name,C:chosen.C.name};
@@ -315,6 +323,8 @@ $('minus').onclick=()=>setPeople(people-1);
 $('plus').onclick=()=>setPeople(people+1);
 document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>spin(b.dataset.d));
 document.querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>toggleLock(b.dataset.l,b));
+['A','B','C'].forEach(c=>$('search-'+c).addEventListener('input',()=>searchDishes(c)));
+document.addEventListener('click',e=>{if(!e.target.closest('.cat'))['A','B','C'].forEach(c=>{const b=$('dlist-'+c);if(b)b.classList.remove('show');});});
 $('rollAll').onclick=rollAll;
 $('confirmPick').onclick=confirmPick;
 $('calc').onclick=calc;
