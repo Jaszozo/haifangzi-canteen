@@ -167,8 +167,9 @@ const DEFAULT_PRICES={'猪腿肉|斤':10,'五花肉|斤':10,'猪肉末|斤':10,'
 /* ====== 状态 ====== */
 let MENU={A:[],B:[],C:[]}, PRICES={}, people=10, chosen={A:null,B:null,C:null}, locked={A:false,B:false,C:false};
 let editingPrices=false, delMode=false, editMode=false;
-let pantry=new Set(); const DEFAULT_PANTRY=['鸡蛋','皮蛋']; let buyNow=new Set();
-function isSkip(n){return DEFAULT_PANTRY.includes(n)?!buyNow.has(n):pantry.has(n);}
+const DEFAULT_PANTRY=['鸡蛋','皮蛋']; const BOX={'鸡蛋':24}; let buyNow=new Set(); let skipNow=new Set();
+function isSkip(n){return DEFAULT_PANTRY.includes(n)?!buyNow.has(n):skipNow.has(n);}
+function effRow(r){return BOX[r.n]?{buy:BOX[r.n],u:'个',sub:(r.price!=null)?BOX[r.n]*r.price:null}:{buy:r.buy,u:r.u,sub:r.sub};}
 
 /* ====== 工具 ====== */
 function $(id){return document.getElementById(id);}
@@ -193,7 +194,7 @@ async function loadAll(){
     MENU={A:[],B:[],C:[]};
     (dq.data||[]).forEach(r=>{(MENU[r.cat]=MENU[r.cat]||[]).push({name:r.name,ing:r.ing||[]});});
     PRICES={}; (pq.data||[]).forEach(r=>PRICES[r.key]=Number(r.price));
-    if(sq.data){ people=sq.data.people||10; applyPick(sq.data.pick); pantry=new Set(Array.isArray(sq.data.pantry)?sq.data.pantry:[]); }
+    if(sq.data){ people=sq.data.people||10; applyPick(sq.data.pick); }
     $('peopleVal').textContent=people; $('r-people').textContent=people;
     setStatus('ok','☁️ 已同步');
     renderDishLib(); renderPriceGrid(); renderPick(); if(window._rows)renderShop();
@@ -235,9 +236,9 @@ function renderShop(){
   const rows=window._rows||[]; const body=$('shopBody'); body.innerHTML='';
   if(!rows.length){body.innerHTML='<tr><td colspan="4" class="empty">点"计算"生成清单</td></tr>';$('grandTotal').textContent=money(0);$('costHint').style.display='none';return;}
   let total=0,missing=0;
-  rows.forEach(r=>{const skip=isSkip(r.n); if(!skip){if(r.sub!=null)total+=r.sub;else missing++;}
+  rows.forEach(r=>{const skip=isSkip(r.n); const e=effRow(r); if(!skip){if(e.sub!=null)total+=e.sub;else missing++;}
     const tr=document.createElement('tr'); if(skip)tr.style.opacity='.45';
-    tr.innerHTML='<td>'+r.n+' <button class="tglbuy" data-n="'+r.n+'">'+(skip?'🔆要买':'无需买')+'</button>'+(skip?'<span style="font-size:11px;color:var(--sub)"> 无需购买</span>':'')+'</td><td class="num">'+(skip?'—':showQty(r.buy,r.u))+'</td><td class="num">'+(skip?'—':(r.price!=null?money(r.price)+'/'+r.u:'<span style="color:#c06b3a">缺价</span>'))+'</td><td class="num">'+(skip?'—':(r.sub!=null?money(r.sub):'—'))+'</td>';
+    tr.innerHTML='<td>'+r.n+' <button class="tglbuy" data-n="'+r.n+'">'+(skip?'🔆要买':'无需买')+'</button>'+(skip?'<span style="font-size:11px;color:var(--sub)"> 无需购买</span>':'')+'</td><td class="num">'+(skip?'—':showQty(e.buy,e.u))+'</td><td class="num">'+(skip?'—':(r.price!=null?money(r.price)+'/'+r.u:'<span style="color:#c06b3a">缺价</span>'))+'</td><td class="num">'+(skip?'—':(e.sub!=null?money(e.sub):'—'))+'</td>';
     body.appendChild(tr);});
   body.querySelectorAll('.tglbuy').forEach(b=>b.onclick=()=>togglePantry(b.dataset.n));
   $('grandTotal').textContent=money(total); window._total=total;
@@ -248,12 +249,11 @@ function renderShop(){
   else{cls='over';msg='约 '+money(per10)+'/10人，超出参考（'+COST_MIN+'–'+COST_MAX+'元）。';}
   if(missing)msg+=' ⚠️ '+missing+' 种缺价。'; hint.className='hint '+cls; hint.style.display='block'; hint.textContent=msg;
 }
-function togglePantry(n){if(DEFAULT_PANTRY.includes(n)){if(buyNow.has(n))buyNow.delete(n);else buyNow.add(n);renderShop();}else{if(pantry.has(n))pantry.delete(n);else pantry.add(n);renderShop();savePantry();}}
-async function savePantry(){const {error}=await SB.from('app_state').update({pantry:[...pantry]}).eq('id',1);if(error)toast('需先在 app_state 加 pantry 列');}
+function togglePantry(n){if(DEFAULT_PANTRY.includes(n)){buyNow.has(n)?buyNow.delete(n):buyNow.add(n);}else{skipNow.has(n)?skipNow.delete(n):skipNow.add(n);}renderShop();}
 function copyList(){
   if(!window._rows){toast('请先计算');return;}
   let t='【'+fmtDate()+'】海房子食堂买菜清单（'+people+'人）\n菜：'+['A','B','C'].map(c=>chosen[c]&&chosen[c].name).filter(Boolean).join(' / ')+'\n\n';
-  window._rows.filter(r=>!isSkip(r.n)).forEach(r=>t+='・'+r.n+'  '+showQty(r.buy,r.u)+(r.sub!=null?'  '+money(r.sub):'')+'\n');
+  window._rows.filter(r=>!isSkip(r.n)).forEach(r=>{const e=effRow(r);t+='・'+r.n+'  '+showQty(e.buy,e.u)+(e.sub!=null?'  '+money(e.sub):'')+'\n';});
   t+='\n合计 '+money(window._total||0);
   if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('已复制 ✅'),()=>fb(t));else fb(t);
 }
