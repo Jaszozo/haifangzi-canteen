@@ -55,6 +55,7 @@
   .dishchip:active{transform:scale(.95)}
   .dishchip.sel{background:var(--gold);color:#fff}
   .dishchip.del{background:#fbe0d6;color:#b5612e}
+  .dishchip.edit{background:#dfeaf2;color:#2f6b8a}
   .price-grid{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center}
   .price-grid .pl{font-size:14px} .price-grid input{width:90px;text-align:right}
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
@@ -102,14 +103,14 @@
 
   <div class="panel">
     <details><summary>① 菜库：点选今日 / 录入新菜 / 删除</summary>
-      <p class="mini">用量按 <b>3 人份</b> 填（计算时自动 ÷3 ×实际人数）。单位：斤 / 个 / 头 / 根。保存后<b>全员同步</b>。</p>
+      <p class="mini">用量按 <b>10 人份</b> 填（计算时自动按实际人数换算）。单位：斤 / 个 / 头 / 根。保存后<b>全员同步</b>。</p>
       <div class="formrow">
         <select id="addCat"><option value="A">A 蔬菜炒肉</option><option value="B">B 配菜/蛋</option><option value="C">C 绿叶时蔬</option></select>
         <input id="addName" placeholder="菜名，如 茭白炒肉" style="flex:1;min-width:120px">
       </div>
       <div id="ingRows"></div>
       <div class="btns" style="margin:8px 0"><button class="btn btn-ghost" id="addIng">＋ 加食材</button><button class="btn btn-main" id="saveDish">💾 保存这道菜</button></div>
-      <div class="row" style="margin:10px 0 4px"><span class="mini" id="libHint" style="margin:0">👆 点菜名＝选用到今日 A/B/C；想删菜点右侧切换</span><button class="icon" id="delModeBtn">🗑 删除模式：关</button></div>
+      <div style="margin:10px 0 4px"><div class="mini" id="libHint" style="margin:0 0 6px">👆 点菜名＝选用到今日 A/B/C；编辑/删除点右侧切换</div><div class="btns"><button class="icon" id="editModeBtn">✏️ 编辑模式：关</button><button class="icon" id="delModeBtn">🗑 删除模式：关</button></div></div>
       <div id="dishLists"></div>
       <div class="btns" style="margin-top:8px"><button class="btn btn-ghost" id="seed">🌱 载入默认菜谱（仅首次）</button></div>
     </details>
@@ -134,30 +135,30 @@ const SB_URL='https://mjrxmecenqqcefoiofvo.supabase.co';
 const SB_KEY='sb_publishable_HC-DRUG1jceUUbHpItOzZw_PPK5qlIo';
 const SB = supabase.createClient(SB_URL, SB_KEY);
 
-const BASE=3, COST_MIN=30, COST_MAX=50;
+const BASE=10, COST_MIN=30, COST_MAX=50;
 const DEFAULT_MENU={
- A:[{name:'茭白炒肉',ing:[{n:'猪腿肉',q:0.4,u:'斤'},{n:'茭白',q:0.6,u:'斤'},{n:'青椒',q:1,u:'个'}]},
-    {name:'青椒回锅肉',ing:[{n:'五花肉',q:0.5,u:'斤'},{n:'青椒',q:4,u:'个'},{n:'蒜',q:0.5,u:'头'}]},
-    {name:'香菇炒肉',ing:[{n:'猪腿肉',q:0.4,u:'斤'},{n:'香菇',q:0.4,u:'斤'},{n:'青椒',q:1,u:'个'}]},
-    {name:'春笋炒肉',ing:[{n:'猪腿肉',q:0.4,u:'斤'},{n:'春笋',q:0.6,u:'斤'},{n:'青椒',q:1,u:'个'}]},
-    {name:'虾仁青瓜',ing:[{n:'虾仁',q:0.4,u:'斤'},{n:'黄瓜',q:0.6,u:'斤'},{n:'蒜',q:0.5,u:'头'}]},
-    {name:'酸椒芹菜炒肉',ing:[{n:'猪腿肉',q:0.4,u:'斤'},{n:'芹菜',q:0.5,u:'斤'},{n:'酸椒',q:0.2,u:'斤'}]}],
- B:[{name:'麻婆豆腐',ing:[{n:'豆腐',q:1.5,u:'斤'},{n:'猪肉末',q:0.2,u:'斤'}]},
-    {name:'蒸蛋',ing:[{n:'鸡蛋',q:6,u:'个'}]},
-    {name:'茼蒿炒臭豆腐',ing:[{n:'茼蒿',q:0.5,u:'斤'},{n:'臭豆腐',q:0.5,u:'斤'}]},
-    {name:'芹菜香干',ing:[{n:'芹菜',q:0.5,u:'斤'},{n:'香干',q:0.4,u:'斤'}]},
-    {name:'西葫芦炒蛋',ing:[{n:'西葫芦',q:0.8,u:'斤'},{n:'鸡蛋',q:3,u:'个'}]},
-    {name:'蒜蓉青菜',ing:[{n:'青菜',q:0.8,u:'斤'},{n:'蒜',q:0.3,u:'头'}]}],
- C:[{name:'清炒油麦菜',ing:[{n:'油麦菜',q:0.8,u:'斤'},{n:'蒜',q:0.3,u:'头'}]},
-    {name:'蒜蓉菠菜',ing:[{n:'菠菜',q:0.8,u:'斤'},{n:'蒜',q:0.3,u:'头'}]},
-    {name:'上汤娃娃菜',ing:[{n:'娃娃菜',q:0.8,u:'斤'},{n:'皮蛋',q:1,u:'个'}]},
-    {name:'清炒小白菜',ing:[{n:'小白菜',q:0.8,u:'斤'},{n:'蒜',q:0.3,u:'头'}]},
-    {name:'蒜蓉空心菜',ing:[{n:'空心菜',q:0.8,u:'斤'},{n:'蒜',q:0.3,u:'头'}]}]};
+ A:[{name:'茭白炒肉',ing:[{n:'猪腿肉',q:1.5,u:'斤'},{n:'茭白',q:2,u:'斤'},{n:'青椒',q:3,u:'个'}]},
+    {name:'青椒回锅肉',ing:[{n:'五花肉',q:1.5,u:'斤'},{n:'青椒',q:13,u:'个'},{n:'蒜',q:1.5,u:'头'}]},
+    {name:'香菇炒肉',ing:[{n:'猪腿肉',q:1.5,u:'斤'},{n:'香菇',q:1.5,u:'斤'},{n:'青椒',q:3,u:'个'}]},
+    {name:'春笋炒肉',ing:[{n:'猪腿肉',q:1.5,u:'斤'},{n:'春笋',q:2,u:'斤'},{n:'青椒',q:3,u:'个'}]},
+    {name:'虾仁青瓜',ing:[{n:'虾仁',q:1.5,u:'斤'},{n:'黄瓜',q:2,u:'斤'},{n:'蒜',q:1.5,u:'头'}]},
+    {name:'酸椒芹菜炒肉',ing:[{n:'猪腿肉',q:1.5,u:'斤'},{n:'芹菜',q:1.5,u:'斤'},{n:'酸椒',q:0.5,u:'斤'}]}],
+ B:[{name:'麻婆豆腐',ing:[{n:'豆腐',q:5,u:'斤'},{n:'猪肉末',q:0.5,u:'斤'}]},
+    {name:'蒸蛋',ing:[{n:'鸡蛋',q:20,u:'个'}]},
+    {name:'茼蒿炒臭豆腐',ing:[{n:'茼蒿',q:1.5,u:'斤'},{n:'臭豆腐',q:1.5,u:'斤'}]},
+    {name:'芹菜香干',ing:[{n:'芹菜',q:1.5,u:'斤'},{n:'香干',q:1.5,u:'斤'}]},
+    {name:'西葫芦炒蛋',ing:[{n:'西葫芦',q:2.5,u:'斤'},{n:'鸡蛋',q:10,u:'个'}]},
+    {name:'蒜蓉青菜',ing:[{n:'青菜',q:2.5,u:'斤'},{n:'蒜',q:1,u:'头'}]}],
+ C:[{name:'清炒油麦菜',ing:[{n:'油麦菜',q:2.5,u:'斤'},{n:'蒜',q:1,u:'头'}]},
+    {name:'蒜蓉菠菜',ing:[{n:'菠菜',q:2.5,u:'斤'},{n:'蒜',q:1,u:'头'}]},
+    {name:'上汤娃娃菜',ing:[{n:'娃娃菜',q:2.5,u:'斤'},{n:'皮蛋',q:3,u:'个'}]},
+    {name:'清炒小白菜',ing:[{n:'小白菜',q:2.5,u:'斤'},{n:'蒜',q:1,u:'头'}]},
+    {name:'蒜蓉空心菜',ing:[{n:'空心菜',q:2.5,u:'斤'},{n:'蒜',q:1,u:'头'}]}]};
 const DEFAULT_PRICES={'猪腿肉|斤':10,'五花肉|斤':10,'猪肉末|斤':10,'虾仁|斤':25,'茭白|斤':3,'香菇|斤':8,'春笋|斤':5,'黄瓜|斤':2,'芹菜|斤':3,'酸椒|斤':8,'豆腐|斤':2,'臭豆腐|斤':4,'香干|斤':5,'西葫芦|斤':2,'茼蒿|斤':4,'青菜|斤':2,'油麦菜|斤':3,'菠菜|斤':3,'娃娃菜|斤':3,'小白菜|斤':2,'空心菜|斤':3,'青椒|个':0.5,'鸡蛋|个':0.8,'皮蛋|个':1.5,'蒜|头':0.5};
 
 /* ====== 状态 ====== */
 let MENU={A:[],B:[],C:[]}, PRICES={}, people=10, chosen={A:null,B:null,C:null}, locked={A:false,B:false,C:false};
-let editingPrices=false, delMode=false;
+let editingPrices=false, delMode=false, editMode=false;
 
 /* ====== 工具 ====== */
 function $(id){return document.getElementById(id);}
@@ -261,14 +262,17 @@ function renderDishLib(){
     (MENU[c]||[]).forEach(d=>{
       const chip=document.createElement('span');
       const isSel=chosen[c]&&chosen[c].name===d.name;
-      chip.className='dishchip'+(delMode?' del':(isSel?' sel':''));
-      chip.textContent=(delMode?'🗑 ':'')+d.name+((isSel&&!delMode)?' ✓':'');
-      chip.onclick=()=>{ if(delMode){ if(confirm('删除「'+d.name+'」？会同步删除给全员')) delDish(c,d.name); } else selectDish(c,d.name); };
+      chip.className='dishchip'+(delMode?' del':(editMode?' edit':(isSel?' sel':'')));
+      chip.textContent=(delMode?'🗑 ':(editMode?'✏️ ':''))+d.name+((isSel&&!delMode&&!editMode)?' ✓':'');
+      chip.onclick=()=>{ if(delMode){ if(confirm('删除「'+d.name+'」？会同步删除给全员')) delDish(c,d.name); } else if(editMode){ editDish(c,d.name); } else selectDish(c,d.name); };
       w.appendChild(chip);
     });
     box.appendChild(w);});
 }
 function selectDish(cat,name){const d=(MENU[cat]||[]).find(x=>x.name===name);if(!d)return;chosen[cat]=d;renderPick();renderDishLib();toast('已选用：'+name);}
+function editDish(cat,name){const d=(MENU[cat]||[]).find(x=>x.name===name);if(!d)return;$('addCat').value=cat;$('addName').value=name;$('ingRows').innerHTML='';(d.ing||[]).forEach(it=>addIngRow(it.n,it.q,it.u));if(!(d.ing||[]).length)addIngRow();$('addName').scrollIntoView({behavior:'smooth',block:'center'});toast('已载入「'+name+'」，改完点 保存这道菜');}
+function setMode(which){if(which==='edit'){editMode=!editMode;if(editMode)delMode=false;}else{delMode=!delMode;if(delMode)editMode=false;}updateModeUI();}
+function updateModeUI(){$('editModeBtn').textContent='✏️ 编辑模式：'+(editMode?'开':'关');$('delModeBtn').textContent='🗑 删除模式：'+(delMode?'开':'关');$('libHint').textContent=editMode?'✏️ 编辑模式：点菜名载入表单修改（改完点 保存这道菜）':delMode?'⚠️ 删除模式：点菜名即删除（会同步全员）':'👆 点菜名＝选用到今日 A/B/C；编辑/删除点右侧切换';renderDishLib();}
 async function seed(){
   const rows=[]; ['A','B','C'].forEach(c=>DEFAULT_MENU[c].forEach(d=>rows.push({cat:c,name:d.name,ing:d.ing})));
   const pr=Object.keys(DEFAULT_PRICES).map(k=>({key:k,price:DEFAULT_PRICES[k]}));
@@ -319,7 +323,8 @@ $('refresh').onclick=loadAll;
 $('addIng').onclick=()=>addIngRow();
 $('saveDish').onclick=saveDish;
 $('seed').onclick=seed;
-$('delModeBtn').onclick=()=>{delMode=!delMode;$('delModeBtn').textContent='🗑 删除模式：'+(delMode?'开':'关');$('libHint').textContent=delMode?'⚠️ 删除模式：点菜名即删除该菜（会同步全员）':'👆 点菜名＝选用到今日 A/B/C；想删菜点右侧切换';renderDishLib();};
+$('editModeBtn').onclick=()=>setMode('edit');
+$('delModeBtn').onclick=()=>setMode('del');
 $('savePrice').onclick=savePrice;
 addIngRow();addIngRow();
 window.addEventListener('focus',()=>{if(!editingPrices)loadAll();});
