@@ -67,6 +67,8 @@
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;z-index:9}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .empty{color:var(--sub);font-size:14px;text-align:center;padding:10px}
+  .tglbuy{border:1px solid var(--line);background:#fff;border-radius:7px;font-size:11px;padding:2px 7px;cursor:pointer;margin-left:4px;font-weight:700;color:var(--sub)}
+  .tglbuy:active{transform:scale(.95)}
 </style>
 </head>
 <body>
@@ -165,6 +167,7 @@ const DEFAULT_PRICES={'猪腿肉|斤':10,'五花肉|斤':10,'猪肉末|斤':10,'
 /* ====== 状态 ====== */
 let MENU={A:[],B:[],C:[]}, PRICES={}, people=10, chosen={A:null,B:null,C:null}, locked={A:false,B:false,C:false};
 let editingPrices=false, delMode=false, editMode=false;
+let pantry=new Set(['鸡蛋','皮蛋']);
 
 /* ====== 工具 ====== */
 function $(id){return document.getElementById(id);}
@@ -189,10 +192,10 @@ async function loadAll(){
     MENU={A:[],B:[],C:[]};
     (dq.data||[]).forEach(r=>{(MENU[r.cat]=MENU[r.cat]||[]).push({name:r.name,ing:r.ing||[]});});
     PRICES={}; (pq.data||[]).forEach(r=>PRICES[r.key]=Number(r.price));
-    if(sq.data){ people=sq.data.people||10; applyPick(sq.data.pick); }
+    if(sq.data){ people=sq.data.people||10; applyPick(sq.data.pick); pantry=new Set(Array.isArray(sq.data.pantry)?sq.data.pantry:['鸡蛋','皮蛋']); }
     $('peopleVal').textContent=people; $('r-people').textContent=people;
     setStatus('ok','☁️ 已同步');
-    renderDishLib(); renderPriceGrid(); renderPick();
+    renderDishLib(); renderPriceGrid(); renderPick(); if(window._rows)renderShop();
   }catch(e){ setStatus('bad','⚠️ 未连接（请先在 Supabase 跑建表 SQL）'); console.error(e); }
 }
 function applyPick(pick){
@@ -223,28 +226,34 @@ function calc(){
   if(dishes.length<3){toast('请先抽满三道菜');return;}
   const factor=people/BASE, map={};
   dishes.forEach(d=>(d.ing||[]).forEach(it=>{const k=it.n+'|'+it.u;map[k]=(map[k]||0)+(Number(it.q)||0)*factor;}));
-  const rows=Object.keys(map).map(k=>{const [n,u]=k.split('|'),buy=roundBuy(map[k],u),price=PRICES[k],sub=(price!=null)?buy*price:null;return{n,u,buy,price,sub};})
+  window._rows=Object.keys(map).map(k=>{const [n,u]=k.split('|'),buy=roundBuy(map[k],u),price=PRICES[k],sub=(price!=null)?buy*price:null;return{n,u,buy,price,sub};})
     .sort((a,b)=>(a.sub==null)-(b.sub==null)||b.sub-a.sub);
-  let total=0,missing=0; const body=$('shopBody'); body.innerHTML='';
-  rows.forEach(r=>{ if(r.sub!=null)total+=r.sub;else missing++;
-    const tr=document.createElement('tr');
-    tr.innerHTML='<td>'+r.n+'</td><td class="num">'+showQty(r.buy,r.u)+'</td><td class="num">'+(r.price!=null?money(r.price)+'/'+r.u:'<span style="color:#c06b3a">缺价</span>')+'</td><td class="num">'+(r.sub!=null?money(r.sub):'—')+'</td>';
+  $('r-people').textContent=people; renderShop();
+}
+function renderShop(){
+  const rows=window._rows||[]; const body=$('shopBody'); body.innerHTML='';
+  if(!rows.length){body.innerHTML='<tr><td colspan="4" class="empty">点"计算"生成清单</td></tr>';$('grandTotal').textContent=money(0);$('costHint').style.display='none';return;}
+  let total=0,missing=0;
+  rows.forEach(r=>{const skip=pantry.has(r.n); if(!skip){if(r.sub!=null)total+=r.sub;else missing++;}
+    const tr=document.createElement('tr'); if(skip)tr.style.opacity='.45';
+    tr.innerHTML='<td>'+r.n+' <button class="tglbuy" data-n="'+r.n+'">'+(skip?'🔆要买':'无需买')+'</button>'+(skip?'<span style="font-size:11px;color:var(--sub)"> 无需购买</span>':'')+'</td><td class="num">'+(skip?'—':showQty(r.buy,r.u))+'</td><td class="num">'+(skip?'—':(r.price!=null?money(r.price)+'/'+r.u:'<span style="color:#c06b3a">缺价</span>'))+'</td><td class="num">'+(skip?'—':(r.sub!=null?money(r.sub):'—'))+'</td>';
     body.appendChild(tr);});
-  if(!rows.length)body.innerHTML='<tr><td colspan="4" class="empty">所选菜没有食材</td></tr>';
-  $('grandTotal').textContent=money(total); $('r-people').textContent=people;
-  const per10=total/people*10, hint=$('costHint'); let cls,msg;
-  if(per10<COST_MIN){cls='warn';msg='约 '+money(per10)+'/10人，低于参考（'+COST_MIN+'–'+COST_MAX+'元），可加量/加菜。';}
+  body.querySelectorAll('.tglbuy').forEach(b=>b.onclick=()=>togglePantry(b.dataset.n));
+  $('grandTotal').textContent=money(total); window._total=total;
+  const hint=$('costHint'); if(total<=0){hint.style.display='none';return;}
+  const per10=total/people*10; let cls,msg;
+  if(per10<COST_MIN){cls='warn';msg='约 '+money(per10)+'/10人，低于参考（'+COST_MIN+'–'+COST_MAX+'元）。';}
   else if(per10<=COST_MAX){cls='ok';msg='约 '+money(per10)+'/10人，在参考区间内 ✅。';}
   else{cls='over';msg='约 '+money(per10)+'/10人，超出参考（'+COST_MIN+'–'+COST_MAX+'元）。';}
-  if(missing)msg+=' ⚠️ '+missing+' 种食材缺价格（去入口②补）。';
-  hint.className='hint '+cls; hint.style.display='block'; hint.textContent=msg;
-  window._rows=rows; window._total=total;
+  if(missing)msg+=' ⚠️ '+missing+' 种缺价。'; hint.className='hint '+cls; hint.style.display='block'; hint.textContent=msg;
 }
+function togglePantry(n){if(pantry.has(n))pantry.delete(n);else pantry.add(n);renderShop();savePantry();}
+async function savePantry(){const {error}=await SB.from('app_state').update({pantry:[...pantry]}).eq('id',1);if(error)toast('需先在 app_state 加 pantry 列');}
 function copyList(){
   if(!window._rows){toast('请先计算');return;}
   let t='【'+fmtDate()+'】海房子食堂买菜清单（'+people+'人）\n菜：'+['A','B','C'].map(c=>chosen[c]&&chosen[c].name).filter(Boolean).join(' / ')+'\n\n';
-  window._rows.forEach(r=>t+='・'+r.n+'  '+showQty(r.buy,r.u)+(r.sub!=null?'  '+money(r.sub):'')+'\n');
-  t+='\n合计 '+money(window._total);
+  window._rows.filter(r=>!pantry.has(r.n)).forEach(r=>t+='・'+r.n+'  '+showQty(r.buy,r.u)+(r.sub!=null?'  '+money(r.sub):'')+'\n');
+  t+='\n合计 '+money(window._total||0);
   if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast('已复制 ✅'),()=>fb(t));else fb(t);
 }
 function fb(t){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');toast('已复制 ✅');}catch(e){}a.remove();}
