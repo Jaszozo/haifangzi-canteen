@@ -194,7 +194,7 @@ async function loadAll(){
     MENU={A:[],B:[],C:[]};
     (dq.data||[]).forEach(r=>{(MENU[r.cat]=MENU[r.cat]||[]).push({name:r.name,ing:r.ing||[]});});
     PRICES={}; (pq.data||[]).forEach(r=>PRICES[r.key]=Number(r.price));
-    if(sq.data){ people=sq.data.people||10; applyPick(sq.data.pick); }
+    if(sq.data){ people=sq.data.people||10; applyPick(sq.data.pick); const mk=sq.data.pantry; if(mk&&mk.date===todayStr()){skipNow=new Set(mk.skip||[]);buyNow=new Set(mk.buy||[]);}else{skipNow=new Set();buyNow=new Set();} }
     $('peopleVal').textContent=people; $('r-people').textContent=people;
     setStatus('ok','☁️ 已同步');
     renderDishLib(); renderPriceGrid(); renderPick(); if(window._rows)renderShop();
@@ -249,7 +249,8 @@ function renderShop(){
   else{cls='over';msg='约 '+money(per10)+'/10人，超出参考（'+COST_MIN+'–'+COST_MAX+'元）。';}
   if(missing)msg+=' ⚠️ '+missing+' 种缺价。'; hint.className='hint '+cls; hint.style.display='block'; hint.textContent=msg;
 }
-function togglePantry(n){if(DEFAULT_PANTRY.includes(n)){buyNow.has(n)?buyNow.delete(n):buyNow.add(n);}else{skipNow.has(n)?skipNow.delete(n):skipNow.add(n);}renderShop();}
+function togglePantry(n){if(DEFAULT_PANTRY.includes(n)){buyNow.has(n)?buyNow.delete(n):buyNow.add(n);}else{skipNow.has(n)?skipNow.delete(n):skipNow.add(n);}renderShop();saveMarks();}
+async function saveMarks(){const {error}=await SB.from('app_state').update({pantry:{date:todayStr(),skip:[...skipNow],buy:[...buyNow]}}).eq('id',1);if(error)toast('同步失败：'+error.message);}
 function copyList(){
   if(!window._rows){toast('请先计算');return;}
   let t='【'+fmtDate()+'】海房子食堂买菜清单（'+people+'人）\n菜：'+['A','B','C'].map(c=>chosen[c]&&chosen[c].name).filter(Boolean).join(' / ')+'\n\n';
